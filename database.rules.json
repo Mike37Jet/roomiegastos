@@ -1,0 +1,30 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "groups": {
+      "$groupId": {
+        ".read": "auth != null",
+        ".write": "auth != null && (data.child('adminId').val() == auth.uid || newData.child('adminId').val() == auth.uid)"
+      }
+    },
+    "userGroups": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "groupInvites": {
+      "$inviteId": {
+        ".read": "auth != null && (data.child('adminId').val() == auth.uid || data.child('requesterId').val() == auth.uid)",
+        ".write": "auth != null"
+      }
+    }
+  }
+}

@@ -1,0 +1,61 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isGroupAdmin() {
+      return isSignedIn() && resource.data.adminId == request.auth.uid;
+    }
+
+    function isGroupMember() {
+      return isSignedIn() && resource.data.memberIds[request.auth.uid] == true;
+    }
+
+    function onlyUpdatesUpdatedAt() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt']);
+    }
+
+    match /users/{userId} {
+      allow read, create, update, delete: if isUser(userId);
+
+      match /pushTokens/{tokenId} {
+        allow read, write: if isUser(userId);
+      }
+    }
+
+    match /groups/{groupId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.adminId == request.auth.uid
+        && request.resource.data.memberIds[request.auth.uid] == true;
+      allow update: if isGroupAdmin() || (isGroupMember() && onlyUpdatesUpdatedAt());
+      allow delete: if isGroupAdmin();
+
+      match /expenses/{expenseId} {
+        allow read, write: if isSignedIn()
+          && get(/databases/$(database)/documents/groups/$(groupId))
+            .data.memberIds[request.auth.uid] == true;
+      }
+    }
+
+    match /groupInvites/{inviteId} {
+      allow create: if isSignedIn()
+        && request.resource.data.requesterId == request.auth.uid
+        && request.resource.data.status == 'pending';
+      allow read: if isSignedIn()
+        && (resource.data.adminId == request.auth.uid
+          || resource.data.requesterId == request.auth.uid);
+      allow update: if isSignedIn()
+        && resource.data.adminId == request.auth.uid
+        && request.resource.data.requesterId == resource.data.requesterId
+        && request.resource.data.groupId == resource.data.groupId;
+      allow delete: if false;
+    }
+  }
+}
