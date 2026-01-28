@@ -111,128 +111,129 @@ export default function GroupDetailScreen() {
 
   return (
     <Screen>
-      <Card>
-        <Text style={styles.title}>{group.name}</Text>
-        <Text style={styles.meta}>
-          {group.members.length} miembros · {group.expenses.length} gastos
-        </Text>
-        {isAdmin && (
-          <View style={styles.inviteBox}>
-            <Text style={styles.inviteLabel}>Codigo de invitacion</Text>
-            <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-            <Text style={styles.meta}>
-              Comparte este codigo por WhatsApp para invitar a nuevos miembros.
-            </Text>
-            <Button
-              label="Enviar por WhatsApp"
-              variant="secondary"
-              icon={<PaperPlaneTilt />}
-              onPress={handleShareInvite}
-            />
+      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 24 }}>
+        <Card>
+          <Text style={styles.title}>{group.name}</Text>
+          <Text style={styles.meta}>
+            {group.members.length} miembros · {group.expenses.length} gastos
+          </Text>
+          {isAdmin && (
+            <View style={styles.inviteBox}>
+              <Text style={styles.inviteLabel}>Codigo de invitacion</Text>
+              <Text style={styles.inviteCode}>{group.inviteCode}</Text>
+              <Text style={styles.meta}>
+                Comparte este codigo por WhatsApp para invitar a nuevos miembros.
+              </Text>
+              <Button
+                label="Enviar por WhatsApp"
+                variant="secondary"
+                icon={<PaperPlaneTilt />}
+                onPress={handleShareInvite}
+              />
+            </View>
+          )}
+          <Button
+            label="Agregar gasto"
+            icon={<PlusCircle />}
+            onPress={() => router.push({ pathname: '/(app)/expense/new', params: { groupId: group.id } })}
+          />
+          <Button
+            label="Factura manual"
+            variant="secondary"
+            icon={<NotePencil />}
+            onPress={() => router.push({ pathname: '/(app)/receipt/manual', params: { groupId: group.id } })}
+          />
+        </Card>
+
+        <SectionTitle>Balances</SectionTitle>
+        <Card>
+          {balances.map((balance) => (
+            <View style={styles.row} key={balance.memberId}>
+              <Text style={styles.rowLabel}>{memberMap[balance.memberId]}</Text>
+              <Text style={[styles.amount, balance.net < 0 && styles.negative]}>
+                {formatMoney(balance.net, group.currency)}
+              </Text>
+            </View>
+          ))}
+        </Card>
+
+        <SectionTitle>Sugerencias de pago</SectionTitle>
+        <Card>
+          {settlements.length === 0 ? (
+            <Text style={styles.meta}>Todo esta balanceado.</Text>
+          ) : (
+            <>
+              {settlementsYouOwe.length === 0 && settlementsOwedToYou.length === 0 && (
+                <Text style={styles.meta}>Todo esta balanceado.</Text>
+              )}
+              {settlementsYouOwe.length > 0 && (
+                <View style={{ gap: 6 }}>
+                  <Text style={styles.rowLabel}>Tus pagos pendientes</Text>
+                  {settlementsYouOwe.map((settlement, index) => {
+                    const key = `${settlement.fromId}-${settlement.toId}-${index}`;
+                    const receipt = receipts[key];
+                    return (
+                      <View style={{ gap: 6 }} key={key}>
+                        <Text style={styles.meta}>
+                          Pagas a {memberMap[settlement.toId]} {formatMoney(settlement.amount, group.currency)}
+                        </Text>
+                        <Button
+                          label={receipt ? 'Comprobante adjuntado' : 'Marcar pagado / subir comprobante'}
+                          variant={receipt ? 'secondary' : 'ghost'}
+                          onPress={() => void handlePayAndAttach(key)}
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+              {settlementsOwedToYou.length > 0 && (
+                <View style={{ gap: 6, marginTop: 10 }}>
+                  <Text style={styles.rowLabel}>Te deben</Text>
+                  {settlementsOwedToYou.map((settlement, index) => (
+                    <Text style={styles.meta} key={`${settlement.fromId}-${settlement.toId}-owed-${index}`}>
+                      {memberMap[settlement.fromId]} te paga {formatMoney(settlement.amount, group.currency)}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+        </Card>
+
+        <SectionTitle>Gastos recientes</SectionTitle>
+        <Card style={styles.filterCard}>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar por titulo, pagador o participante"
+            placeholderTextColor={colors.muted}
+            style={styles.search}
+          />
+          <View style={styles.chipRow}>
+            <Chip label="24 h" active={range === '1d'} onPress={() => setRange('1d')} colors={colors} />
+            <Chip label="7 días" active={range === '7d'} onPress={() => setRange('7d')} colors={colors} />
+            <Chip label="30 días" active={range === '30d'} onPress={() => setRange('30d')} colors={colors} />
+            <Chip label="Todo" active={range === 'all'} onPress={() => setRange('all')} colors={colors} />
           </View>
-        )}
-        <Button
-          label="Agregar gasto"
-          icon={<PlusCircle />}
-          onPress={() => router.push({ pathname: '/(app)/expense/new', params: { groupId: group.id } })}
-        />
-        <Button
-          label="Factura manual"
-          variant="secondary"
-          icon={<NotePencil />}
-          onPress={() => router.push({ pathname: '/(app)/receipt/manual', params: { groupId: group.id } })}
-        />
-      </Card>
-
-      <SectionTitle>Balances</SectionTitle>
-      <Card>
-        {balances.map((balance) => (
-          <View style={styles.row} key={balance.memberId}>
-            <Text style={styles.rowLabel}>{memberMap[balance.memberId]}</Text>
-            <Text style={[styles.amount, balance.net < 0 && styles.negative]}>
-              {formatMoney(balance.net, group.currency)}
-            </Text>
-          </View>
-        ))}
-      </Card>
-
-      <SectionTitle>Sugerencias de pago</SectionTitle>
-      <Card>
-        {settlements.length === 0 ? (
-          <Text style={styles.meta}>Todo esta balanceado.</Text>
-        ) : (
-          <>
-            {settlementsYouOwe.length === 0 && settlementsOwedToYou.length === 0 && (
-              <Text style={styles.meta}>Todo esta balanceado.</Text>
-            )}
-            {settlementsYouOwe.length > 0 && (
-              <View style={{ gap: 6 }}>
-                <Text style={styles.rowLabel}>Tus pagos pendientes</Text>
-                {settlementsYouOwe.map((settlement, index) => {
-                  const key = `${settlement.fromId}-${settlement.toId}-${index}`;
-                  const receipt = receipts[key];
-                  return (
-                    <View style={{ gap: 6 }} key={key}>
-                      <Text style={styles.meta}>
-                        Pagas a {memberMap[settlement.toId]} {formatMoney(settlement.amount, group.currency)}
-                      </Text>
-                      <Button
-                        label={receipt ? 'Comprobante adjuntado' : 'Marcar pagado / subir comprobante'}
-                        variant={receipt ? 'secondary' : 'ghost'}
-                        onPress={() => void handlePayAndAttach(key)}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-            {settlementsOwedToYou.length > 0 && (
-              <View style={{ gap: 6, marginTop: 10 }}>
-                <Text style={styles.rowLabel}>Te deben</Text>
-                {settlementsOwedToYou.map((settlement, index) => (
-                  <Text style={styles.meta} key={`${settlement.fromId}-${settlement.toId}-owed-${index}`}>
-                    {memberMap[settlement.fromId]} te paga {formatMoney(settlement.amount, group.currency)}
-                  </Text>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-      </Card>
-
-      <SectionTitle>Gastos recientes</SectionTitle>
-      <Card style={styles.filterCard}>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Buscar por titulo, pagador o participante"
-          placeholderTextColor={colors.muted}
-          style={styles.search}
-        />
-        <View style={styles.chipRow}>
-          <Chip label="24 h" active={range === '1d'} onPress={() => setRange('1d')} colors={colors} />
-          <Chip label="7 días" active={range === '7d'} onPress={() => setRange('7d')} colors={colors} />
-          <Chip label="30 días" active={range === '30d'} onPress={() => setRange('30d')} colors={colors} />
-          <Chip label="Todo" active={range === 'all'} onPress={() => setRange('all')} colors={colors} />
+        </Card>
+        <View style={{ gap: 12 }}>
+          {filteredExpenses.length === 0 ? (
+            <Text style={styles.meta}>No hay gastos que coincidan con el filtro.</Text>
+          ) : (
+            filteredExpenses.map((expense) => (
+              <Card key={expense.id}>
+                <Text style={styles.rowLabel}>{expense.title}</Text>
+                <Text style={styles.meta}>
+                  Pagado por {memberMap[expense.paidById]} · {formatMoney(expense.amount, group.currency)}
+                </Text>
+                <Text style={styles.meta}>
+                  Participan: {expense.participantIds.map((id) => memberMap[id]).join(', ')}
+                </Text>
+              </Card>
+            ))
+          )}
         </View>
-      </Card>
-      <ScrollView contentContainerStyle={{ gap: 12 }}>
-        {filteredExpenses.length === 0 ? (
-          <Text style={styles.meta}>No hay gastos que coincidan con el filtro.</Text>
-        ) : (
-          filteredExpenses.map((expense) => (
-            <Card key={expense.id}>
-              <Text style={styles.rowLabel}>{expense.title}</Text>
-              <Text style={styles.meta}>
-                Pagado por {memberMap[expense.paidById]} ·{' '}
-                {formatMoney(expense.amount, group.currency)}
-              </Text>
-              <Text style={styles.meta}>
-                Participan: {expense.participantIds.map((id) => memberMap[id]).join(', ')}
-              </Text>
-            </Card>
-          ))
-        )}
       </ScrollView>
     </Screen>
   );
