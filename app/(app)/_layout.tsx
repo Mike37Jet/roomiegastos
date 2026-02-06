@@ -1,29 +1,78 @@
+import { useThemeColors } from '@/src/theme';
 import { Stack } from 'expo-router';
-import Colors from '@/constants/Colors';
-import { useColorScheme } from '@/components/useColorScheme';
 
 export default function AppLayout() {
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? 'light'];
+  const theme = useThemeColors();
 
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: theme.background },
-        headerTintColor: theme.text,
-        headerTitleStyle: { color: theme.text },
+        headerStyle: { backgroundColor: theme.card },
+        headerShadowVisible: false, // Cleaner look
+        headerTintColor: theme.primary,
+        headerTitleStyle: { color: theme.text, fontWeight: '600' },
+        contentStyle: { backgroundColor: theme.background },
+        animation: 'default',
       }}>
-      <Stack.Screen name="index" options={{ title: 'Tus grupos' }} />
-      <Stack.Screen name="group/new" options={{ title: 'Nuevo grupo' }} />
-      <Stack.Screen name="group/join" options={{ title: 'Unirse a grupo' }} />
-      <Stack.Screen name="group/[id]" options={{ title: 'Detalle del grupo' }} />
-      <Stack.Screen name="expense/new" options={{ title: 'Nuevo gasto' }} />
-      <Stack.Screen name="payments" options={{ title: 'Pagos' }} />
-      <Stack.Screen name="receipt/capture" options={{ title: 'Escanear recibo' }} />
-      <Stack.Screen name="receipt/review" options={{ title: 'Revisar items' }} />
-      <Stack.Screen name="receipt/manual" options={{ title: 'Factura manual' }} />
-      <Stack.Screen name="premium" options={{ title: 'Plan Premium' }} />
-      <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
+      <Stack.Screen name="index" options={{ title: 'Mis Grupos', headerLargeTitle: true }} />
+      <Stack.Screen 
+        name="group/new" 
+        options={{ 
+          title: 'Nuevo Grupo', 
+          presentation: 'modal',
+        }} 
+      />
+      <Stack.Screen 
+        name="group/join" 
+        options={{ 
+          title: 'Unirse', 
+          presentation: 'modal' 
+        }} 
+      />
+      <Stack.Screen 
+        name="group/[id]" 
+        options={{ 
+          title: 'Grupo',
+          headerBackTitle: 'Atrás'
+        }} 
+      />
+      <Stack.Screen 
+        name="expense/new" 
+        options={{ 
+          title: 'Nuevo Gasto', 
+          presentation: 'modal' 
+        }} 
+      />
+      <Stack.Screen name="payments" options={{ title: 'Pagos Pendientes' }} />
+      <Stack.Screen 
+        name="receipt/capture" 
+        options={{ 
+          title: 'Escanear', 
+          presentation: 'fullScreenModal' 
+        }} 
+      />
+      <Stack.Screen name="receipt/review" options={{ title: 'Revisar Items' }} />
+      <Stack.Screen 
+        name="receipt/manual" 
+        options={{ 
+          title: 'Factura Manual',
+          presentation: 'modal'
+        }} 
+      />
+      <Stack.Screen 
+        name="premium" 
+        options={{ 
+          title: 'Premium', 
+          presentation: 'modal' 
+        }} 
+      />
+      <Stack.Screen 
+        name="settings" 
+        options={{ 
+          title: 'Configuración',
+          presentation: 'modal'
+        }} 
+      />
     </Stack>
   );
 }

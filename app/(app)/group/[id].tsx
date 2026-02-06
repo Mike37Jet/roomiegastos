@@ -1,8 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { NotePencil, PaperPlaneTilt, PlusCircle, SignOut, Trash, UserMinus } from 'phosphor-react-native';
+import { NotePencil, PaperPlaneTilt, PlusCircle, QrCode, SignOut, Trash } from 'phosphor-react-native';
 import { useMemo, useState } from 'react';
-import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { calculateBalances, calculateSettlements } from '@/src/calc';
 import { Chip } from '@/src/components/Chip';
@@ -184,179 +184,187 @@ export default function GroupDetailScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ gap: 16, paddingBottom: 24 }}>
-        <Card>
-          <Text style={styles.title}>{group.name}</Text>
-          <Text style={styles.meta}>
-            {group.members.length} miembros · {group.expenses.length} gastos
-          </Text>
-          {isAdmin && (
-            <View style={styles.inviteBox}>
-              <Text style={styles.inviteLabel}>Codigo de invitacion</Text>
-              <Text style={styles.inviteCode}>{group.inviteCode}</Text>
-              <Text style={styles.meta}>
-                Comparte este codigo por WhatsApp para invitar a nuevos miembros.
-              </Text>
-              <Button
-                label="Enviar por WhatsApp"
-                variant="secondary"
-                icon={<PaperPlaneTilt />}
-                onPress={handleShareInvite}
-              />
+      <ScrollView contentContainerStyle={{ gap: 20, paddingBottom: 40 }}>
+        {/* Header Section */}
+        <View style={styles.header}>
+            <View>
+                <Text style={styles.title}>{group.name}</Text>
+                <Text style={styles.subTitle}>
+                    {group.members.length} miembros · {group.expenses.length} gastos
+                </Text>
             </View>
-          )}
-          <Button
-            label="Agregar gasto"
-            icon={<PlusCircle />}
-            onPress={() => router.push({ pathname: '/(app)/expense/new', params: { groupId: group.id } })}
-          />
-          <Button
-            label="Factura manual"
-            variant="secondary"
-            icon={<NotePencil />}
-            onPress={() => router.push({ pathname: '/(app)/receipt/manual', params: { groupId: group.id } })}
-          />
-        </Card>
+            {isAdmin && (
+                <Pressable onPress={handleShareInvite} style={styles.qrButton}>
+                    <QrCode size={20} color={colors.primary} />
+                </Pressable>
+            )}
+        </View>
 
-        {isAdmin && (
-          <>
-            <SectionTitle>Miembros</SectionTitle>
-            <Card>
-              {group.members.map((member) => (
-                <View style={styles.memberRow} key={member.id}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rowLabel}>
-                      {member.name}
-                      {member.id === group.adminId && ' (Admin)'}
-                    </Text>
-                  </View>
-                  {member.id !== group.adminId && (
-                    <Button
-                      label="Remover"
-                      variant="ghost"
-                      icon={<UserMinus color={colors.danger} />}
-                      onPress={() => handleRemoveMember(member.id, member.name)}
-                    />
-                  )}
-                </View>
-              ))}
-            </Card>
-
-            <SectionTitle>Zona de peligro</SectionTitle>
-            <Card>
-              <Text style={styles.dangerText}>
-                Eliminar el grupo es permanente. Todos los gastos, balances e historial se perderán.
-              </Text>
-              <Button
-                label="Eliminar grupo"
-                variant="ghost"
-                icon={<Trash color={colors.danger} />}
-                onPress={handleDeleteGroup}
-              />
-            </Card>
-          </>
-        )}
-
-        {!isAdmin && (
-          <Card>
-            <Button
-              label="Salir del grupo"
-              variant="ghost"
-              icon={<SignOut color={colors.danger} />}
-              onPress={handleLeaveGroup}
+        {/* Global Actions */}
+        <View style={styles.actionGrid}>
+             <Button
+                label="Nuevo Gasto"
+                icon={<PlusCircle size={20} />}
+                onPress={() => router.push({ pathname: '/(app)/expense/new', params: { groupId: group.id } })}
+                style={{ flex: 1 }}
             />
-          </Card>
+            <Button
+                label="Factura Manual"
+                variant="secondary"
+                icon={<NotePencil size={20} />}
+                onPress={() => router.push({ pathname: '/(app)/receipt/manual', params: { groupId: group.id } })}
+                style={{ flex: 1 }}
+            />
+        </View>
+
+        {/* Invite Code - Compact */}
+        {isAdmin && (
+            <Card style={styles.inviteCard}>
+                <View style={styles.inviteHeader}>
+                    <Text style={styles.sectionLabel}>CÓDIGO DE INVITACIÓN</Text>
+                </View>
+                <View style={styles.codeRow}>
+                    <Text style={styles.codeText}>{group.inviteCode}</Text>
+                    <Button 
+                        label="Compartir" 
+                        variant="ghost" 
+                        icon={<PaperPlaneTilt size={16} />}
+                        onPress={handleShareInvite}
+                    />
+                </View>
+            </Card>
         )}
 
-        <SectionTitle>Balances</SectionTitle>
-        <Card>
-          {balances.map((balance) => (
-            <View style={styles.row} key={balance.memberId}>
-              <Text style={styles.rowLabel}>{memberMap[balance.memberId]}</Text>
-              <Text style={[styles.amount, balance.net < 0 && styles.negative]}>
-                {formatMoney(balance.net, group.currency)}
-              </Text>
-            </View>
-          ))}
-        </Card>
+        <View>
+            <SectionTitle>Balances</SectionTitle>
+            <Card style={{ paddingVertical: 8 }}>
+            {balances.map((balance, index) => (
+                <View style={[styles.balanceRow, index < balances.length - 1 && styles.borderBottom]} key={balance.memberId}>
+                    <Text style={styles.rowLabel}>{memberMap[balance.memberId]}</Text>
+                    <Text style={[styles.amount, balance.net < 0 ? styles.negative : styles.positive]}>
+                        {formatMoney(balance.net, group.currency)}
+                    </Text>
+                </View>
+            ))}
+            </Card>
+        </View>
 
-        <SectionTitle>Sugerencias de pago</SectionTitle>
-        <Card>
-          {settlements.length === 0 ? (
-            <Text style={styles.meta}>Todo esta balanceado.</Text>
-          ) : (
-            <>
-              {settlementsYouOwe.length === 0 && settlementsOwedToYou.length === 0 && (
-                <Text style={styles.meta}>Todo esta balanceado.</Text>
-              )}
-              {settlementsYouOwe.length > 0 && (
-                <View style={{ gap: 6 }}>
-                  <Text style={styles.rowLabel}>Tus pagos pendientes</Text>
-                  {settlementsYouOwe.map((settlement, index) => {
+        {(settlementsYouOwe.length > 0 || settlementsOwedToYou.length > 0) && (
+            <View>
+                <SectionTitle>Sugerencias de pago</SectionTitle>
+                <Card style={{ paddingVertical: 8 }}>
+                {settlementsYouOwe.map((settlement, index) => {
                     const key = `${settlement.fromId}-${settlement.toId}-${index}`;
                     const receipt = receipts[key];
                     return (
-                      <View style={{ gap: 6 }} key={key}>
-                        <Text style={styles.meta}>
-                          Pagas a {memberMap[settlement.toId]} {formatMoney(settlement.amount, group.currency)}
-                        </Text>
-                        <Button
-                          label={receipt ? 'Comprobante adjuntado' : 'Marcar pagado / subir comprobante'}
-                          variant={receipt ? 'secondary' : 'ghost'}
-                          onPress={() => void handlePayAndAttach(key)}
-                        />
-                      </View>
+                        <View style={[styles.settlementRow, styles.borderBottom]} key={key}>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.rowLabel}>Debes pagar a {memberMap[settlement.toId]}</Text>
+                                <Text style={styles.settlementAmount}>{formatMoney(settlement.amount, group.currency)}</Text>
+                            </View>
+                             <Button
+                                label={receipt ? 'Adjuntado' : 'Pagar'}
+                                variant={receipt ? 'ghost' : 'primary'}
+                                onPress={() => void handlePayAndAttach(key)}
+                                style={{ minWidth: 80, height: 36 }}
+                            />
+                        </View>
                     );
-                  })}
-                </View>
-              )}
-              {settlementsOwedToYou.length > 0 && (
-                <View style={{ gap: 6, marginTop: 10 }}>
-                  <Text style={styles.rowLabel}>Te deben</Text>
-                  {settlementsOwedToYou.map((settlement, index) => (
-                    <Text style={styles.meta} key={`${settlement.fromId}-${settlement.toId}-owed-${index}`}>
-                      {memberMap[settlement.fromId]} te paga {formatMoney(settlement.amount, group.currency)}
-                    </Text>
-                  ))}
-                </View>
-              )}
-            </>
-          )}
-        </Card>
+                })}
+                {settlementsOwedToYou.map((settlement, index) => (
+                     <View style={[styles.settlementRow, index < settlementsOwedToYou.length - 1 && styles.borderBottom]} key={index}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.rowLabel}>{memberMap[settlement.fromId]} te debe</Text>
+                        </View>
+                        <Text style={[styles.settlementAmount, { color: colors.primary }]}>{formatMoney(settlement.amount, group.currency)}</Text>
+                    </View>
+                ))}
+                </Card>
+            </View>
+        )}
 
-        <SectionTitle>Gastos recientes</SectionTitle>
-        <Card style={styles.filterCard}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Buscar por titulo, pagador o participante"
-            placeholderTextColor={colors.muted}
-            style={styles.search}
-          />
-          <View style={styles.chipRow}>
-            <Chip label="24 h" active={range === '1d'} onPress={() => setRange('1d')} colors={colors} />
-            <Chip label="7 días" active={range === '7d'} onPress={() => setRange('7d')} colors={colors} />
-            <Chip label="30 días" active={range === '30d'} onPress={() => setRange('30d')} colors={colors} />
-            <Chip label="Todo" active={range === 'all'} onPress={() => setRange('all')} colors={colors} />
-          </View>
-        </Card>
-        <View style={{ gap: 12 }}>
-          {filteredExpenses.length === 0 ? (
-            <Text style={styles.meta}>No hay gastos que coincidan con el filtro.</Text>
-          ) : (
-            filteredExpenses.map((expense) => (
-              <Card key={expense.id}>
-                <Text style={styles.rowLabel}>{expense.title}</Text>
-                <Text style={styles.meta}>
-                  Pagado por {memberMap[expense.paidById]} · {formatMoney(expense.amount, group.currency)}
-                </Text>
-                <Text style={styles.meta}>
-                  Participan: {expense.participantIds.map((id) => memberMap[id]).join(', ')}
-                </Text>
-              </Card>
-            ))
-          )}
+        {/* Expenses List */}
+        <View>
+            <SectionTitle>Gastos</SectionTitle>
+            
+            <View style={styles.filterContainer}>
+                 <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Buscar..."
+                    placeholderTextColor={colors.muted}
+                    style={styles.searchCompact}
+                />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                    <Chip label="24h" active={range === '1d'} onPress={() => setRange('1d')} colors={colors} />
+                    <Chip label="7d" active={range === '7d'} onPress={() => setRange('7d')} colors={colors} />
+                    <Chip label="30d" active={range === '30d'} onPress={() => setRange('30d')} colors={colors} />
+                    <Chip label="Todo" active={range === 'all'} onPress={() => setRange('all')} colors={colors} />
+                </ScrollView>
+            </View>
+
+            <Card style={{ paddingVertical: 0, overflow: 'hidden' }}>
+            {filteredExpenses.length === 0 ? (
+                <View style={{ padding: 20, alignItems: 'center' }}>
+                    <Text style={styles.meta}>No hay gastos recientes.</Text>
+                </View>
+            ) : (
+                filteredExpenses.map((expense, index) => (
+                    <View key={expense.id} style={[styles.expenseItem, index < filteredExpenses.length - 1 && styles.borderBottom]}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.expenseTitle}>{expense.title}</Text>
+                            <Text style={styles.expenseMeta}>
+                                {memberMap[expense.paidById]} pagó por {expense.participantIds.length}
+                            </Text>
+                        </View>
+                        <Text style={styles.expenseAmount}>
+                            {formatMoney(expense.amount, group.currency)}
+                        </Text>
+                    </View>
+                ))
+            )}
+            </Card>
         </View>
+
+        {/* Admin / Settings Area */}
+        <View>
+             <SectionTitle>Administración</SectionTitle>
+             <Card style={{ paddingVertical: 0 }}>
+                {isAdmin ? (
+                    <>
+                        <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface }}>
+                            <Text style={styles.sectionLabel}>MIEMBROS</Text>
+                        </View>
+                        {group.members.map((member, idx) => (
+                             <View style={[styles.adminRow, idx < group.members.length - 1 && styles.borderBottom]} key={member.id}>
+                                <Text style={styles.rowLabel}>{member.name} {member.id === group.adminId && '(Tú)'}</Text>
+                                {member.id !== group.adminId && (
+                                    <Pressable onPress={() => handleRemoveMember(member.id, member.name)}>
+                                        <Text style={{ color: colors.danger, fontWeight: '600' }}>Remover</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        ))}
+                         <Pressable 
+                            style={[styles.adminRow, styles.borderBottom]}
+                            onPress={handleDeleteGroup}
+                        >
+                             <Text style={{ color: colors.danger, fontWeight: '600' }}>Eliminar Grupo</Text>
+                             <Trash size={18} color={colors.danger} />
+                        </Pressable>
+                    </>
+                ) : (
+                    <Pressable 
+                        style={styles.adminRow}
+                        onPress={handleLeaveGroup}
+                    >
+                         <Text style={{ color: colors.danger, fontWeight: '600' }}>Salir del grupo</Text>
+                         <SignOut size={18} color={colors.danger} />
+                    </Pressable>
+                )}
+             </Card>
+        </View>
+
       </ScrollView>
     </Screen>
   );
@@ -364,81 +372,138 @@ export default function GroupDetailScreen() {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    header: {
+        marginBottom: 8,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+    },
     title: {
-      fontSize: 20,
+      fontSize: 28,
       fontWeight: '700',
       color: colors.text,
+      letterSpacing: -0.5,
+    },
+    subTitle: {
+      color: colors.muted,
+      fontSize: 15,
+      marginTop: 2,
+    },
+    qrButton: {
+        padding: 10,
+        backgroundColor: colors.card,
+        borderRadius: 20,
+    },
+    actionGrid: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    inviteCard: {
+        padding: 16,
+    },
+    inviteHeader: {
+        marginBottom: 8,
+    },
+    sectionLabel: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: colors.muted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    codeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+    codeText: {
+        fontSize: 24,
+        fontWeight: '800',
+        color: colors.primary,
+        fontVariant: ['tabular-nums'],
+    },
+    balanceRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    },
+    borderBottom: {
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: colors.border,
+    },
+    rowLabel: {
+        fontSize: 16,
+        color: colors.text,
+    },
+    amount: {
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    positive: {
+        color: colors.primary,
+    },
+    negative: {
+        color: colors.danger,
+    },
+    settlementRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: 12,
+        gap: 12,
+    },
+    settlementAmount: {
+        fontWeight: '700',
+        fontSize: 15,
+        color: colors.text,
+    },
+    filterContainer: {
+        marginBottom: 12,
+        gap: 12,
+    },
+    searchCompact: {
+        backgroundColor: colors.card,
+        borderRadius: 10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: 16,
+        color: colors.text,
+    },
+    expenseItem: {
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    expenseTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: colors.text,
+        marginBottom: 2,
+    },
+    expenseMeta: {
+        fontSize: 13,
+        color: colors.muted,
+    },
+    expenseAmount: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: colors.text,
+    },
+    adminRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
     },
     meta: {
       color: colors.muted,
       fontSize: 13,
     },
-    row: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    memberRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 4,
-      gap: 12,
-    },
-    inviteBox: {
-      padding: 12,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.card,
-      gap: 4,
-    },
-    inviteLabel: {
-      fontSize: 12,
-      color: colors.muted,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-    },
-    inviteCode: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.text,
-      letterSpacing: 2,
-    },
-    rowLabel: {
-      color: colors.text,
-      fontWeight: '600',
-    },
-    filterCard: {
-      gap: 10,
-    },
-    search: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
-      color: colors.text,
-      backgroundColor: colors.card,
-    },
-    chipRow: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    amount: {
-      color: colors.primary,
-      fontWeight: '600',
-    },
-    negative: {
-      color: colors.danger,
-    },
-    dangerText: {
-      color: colors.muted,
-      fontSize: 13,
-      marginBottom: 8,
-    },
     emptyText: {
       color: colors.muted,
       textAlign: 'center',
+      marginTop: 20,
     },
   });
