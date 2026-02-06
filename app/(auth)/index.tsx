@@ -1,20 +1,31 @@
-import { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 
-import { Button, Card, Field, Screen, Tag } from '@/src/ui';
-import { ThemeColors, useThemeColors } from '@/src/theme';
 import { useStore } from '@/src/store';
+import { ThemeColors, useThemeColors } from '@/src/theme';
+import { Button, Card, Checkbox, Field, Screen, Tag } from '@/src/ui';
 
 export default function AuthScreen() {
   const router = useRouter();
   const { actions } = useStore();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const [mode, setMode] = useState<'login' | 'register'>('register');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem('auth_email').then((savedEmail) => {
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
+    });
+  }, []);
 
   const handleSubmit = async () => {
     if (mode === 'register') {
@@ -46,6 +57,13 @@ export default function AuthScreen() {
       Alert.alert('No se pudo iniciar', result.message ?? 'Revisa tus datos.');
       return;
     }
+    
+    if (rememberMe) {
+      await AsyncStorage.setItem('auth_email', email.trim());
+    } else {
+      await AsyncStorage.removeItem('auth_email');
+    }
+
     router.replace('/(app)');
   };
 
@@ -89,6 +107,13 @@ export default function AuthScreen() {
           placeholder="Minimo 6 caracteres"
           secureTextEntry
         />
+        {mode === 'login' && (
+          <Checkbox
+            label="Recordarme"
+            checked={rememberMe}
+            onChange={setRememberMe}
+          />
+        )}
         <Button
           label={mode === 'register' ? 'Crear cuenta' : 'Entrar'}
           onPress={handleSubmit}

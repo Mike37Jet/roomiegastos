@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth, type Auth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, setLogLevel, type Firestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
 
 const requiredEnv = [
@@ -71,3 +72,4 @@ try {
 }
 
 export const db = dbInstance;
+export const storage = getStorage(app);

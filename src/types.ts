@@ -3,6 +3,16 @@ export type Member = {
   name: string;
 };
 
+export type ExpenseItemDetail = {
+  name: string;
+  price: number; // User's share pre-tax
+  tax: number; // User's share tax
+  total: number; // User's share total
+  originalPrice: number; // Full item price
+  withTax: boolean;
+  sharedWith: string[];
+};
+
 export type Expense = {
   id: string;
   title: string;
@@ -10,6 +20,10 @@ export type Expense = {
   paidById: string;
   participantIds: string[];
   createdAt: number;
+  items?: ExpenseItemDetail[]; // Optional detailed breakdown
+  receiptId?: string; // Optional: ID if this expense belongs to a batch/receipt
+  receiptUrl?: string; // Optional: URL of the uploaded receipt
+  type?: 'expense' | 'payment'; // Default is 'expense'
 };
 
 export type Group = {

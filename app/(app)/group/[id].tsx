@@ -1,6 +1,8 @@
 import * as ImagePicker from 'expo-image-picker';
+import * as Print from 'expo-print';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { NotePencil, PaperPlaneTilt, PlusCircle, QrCode, SignOut, Trash } from 'phosphor-react-native';
+import { shareAsync } from 'expo-sharing';
+import { FilePdf, NotePencil, PaperPlaneTilt, PlusCircle, QrCode, SignOut, Trash } from 'phosphor-react-native';
 import { useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -9,6 +11,7 @@ import { Chip } from '@/src/components/Chip';
 import { useStore } from '@/src/store';
 import { ThemeColors, useThemeColors } from '@/src/theme';
 import { Button, Card, Screen, SectionTitle } from '@/src/ui';
+import { uploadImage } from '@/src/upload';
 import { formatMoney } from '@/src/utils';
 
 export default function GroupDetailScreen() {
@@ -46,20 +49,142 @@ export default function GroupDetailScreen() {
     ? settlements.filter((s) => s.toId === currentUserId)
     : settlements;
 
-  const handlePayAndAttach = async (settlementKey: string) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permiso requerido', 'Habilita el acceso a fotos para subir el comprobante.');
-      return;
+  const handleSettleDebt = (toId: string, amount: number, toName: string) => {
+    if (!group || !currentUserId) return;
+    
+    Alert.alert(
+      'Registrar Pago de Deuda',
+      `¿Cómo realizaste el pago de ${formatMoney(amount, group.currency)} a ${toName}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Efectivo / Sin recibo',
+          onPress: async () => {
+             try {
+                await actions.addExpense(group.id, {
+                    title: `Pago a ${toName}`,
+                    amount: amount,
+                    paidById: currentUserId,
+                    participantIds: [toId],
+                    type: 'payment',
+                    items: [],
+                });
+                Alert.alert('Pago registrado', 'Se registró como pago en efectivo.');
+             } catch (error) {
+                Alert.alert('Error', 'No se pudo registrar el pago.');
+             }
+          }
+        },
+        {
+          text: 'Adjuntar Comprobante',
+          onPress: async () => {
+             // Same logic as before for uploading
+             try {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se requiere acceso a la galería.');
+                return;
+              }
+
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.5,
+              });
+
+              if (!result.canceled && result.assets.length > 0) {
+                const uri = result.assets[0].uri;
+                try {
+                    const url = await uploadImage(uri, `groups/${group.id}/payments/`);
+                    await actions.addExpense(group.id, {
+                        title: `Pago a ${toName}`,
+                        amount: amount,
+                        paidById: currentUserId,
+                        participantIds: [toId],
+                        type: 'payment',
+                        receiptUrl: url,
+                        items: [],
+                    });
+                    Alert.alert('Pago registrado', 'Comprobante subido correctamente.');
+                } catch (uploadError) {
+                    console.error(uploadError);
+                    Alert.alert('Error', 'No se pudo subir la imagen.');
+                }
+              }
+            } catch (error) {
+              Alert.alert('Error', 'No se pudo iniciar la carga.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleGenerateReport = async () => {
+    if (!group) return;
+
+    const html = `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+          <style>
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
+            h1 { color: ${colors.primary}; margin-bottom: 5px; }
+            .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+            th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+            th { background-color: ${colors.primary}15; color: ${colors.primary}; font-weight: bold; }
+            tr:nth-child(even) { background-color: #f9f9f9; }
+            .amount { text-align: right; font-family: monospace; font-weight: bold; }
+            .footer { margin-top: 50px; font-size: 12px; color: #aaa; text-align: center; border-top: 1px solid #eee; padding-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <h1>Reporte de Cuentas: ${group.name}</h1>
+          <p class="subtitle">Generado el ${new Date().toLocaleDateString()} a las ${new Date().toLocaleTimeString()}</p>
+          
+          <h2>Resumen de Saldos Pendientes</h2>
+          ${settlements.length === 0 ? '<p>No hay deudas pendientes entre los miembros. ¡Están al día!</p>' : `
+          <table>
+            <thead>
+              <tr>
+                <th>Debe Pagar (Deudor)</th>
+                <th>Debe Recibir (Acreedor)</th>
+                <th class="amount">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${settlements.map(s => `
+                <tr>
+                  <td>${memberMap[s.fromId] || 'Desconocido'}</td>
+                  <td>${memberMap[s.toId] || 'Desconocido'}</td>
+                  <td class="amount">${formatMoney(s.amount, group.currency)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          `}
+          
+          <div style="margin-top: 30px;">
+            <h3>Miembros del Grupo</h3>
+            <ul>
+              ${group.members.map(m => `<li>${m.name}</li>`).join('')}
+            </ul>
+          </div>
+
+          <div class="footer">
+            RoomieGastos App - Simplificando cuentas compartidas
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      await shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo generar el reporte PDF.');
+      console.error(error);
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.7,
-    });
-    if (result.canceled || !result.assets?.length) return;
-    const uri = result.assets[0].uri;
-    setReceipts((prev) => ({ ...prev, [settlementKey]: uri }));
-    Alert.alert('Comprobante adjuntado', 'Se guardó la imagen como evidencia de pago.');
   };
 
   const filteredExpenses = useMemo(() => {
@@ -254,18 +379,17 @@ export default function GroupDetailScreen() {
                 <SectionTitle>Sugerencias de pago</SectionTitle>
                 <Card style={{ paddingVertical: 8 }}>
                 {settlementsYouOwe.map((settlement, index) => {
-                    const key = `${settlement.fromId}-${settlement.toId}-${index}`;
-                    const receipt = receipts[key];
+                    const toName = memberMap[settlement.toId] || 'Usuario';
                     return (
-                        <View style={[styles.settlementRow, styles.borderBottom]} key={key}>
+                        <View style={[styles.settlementRow, styles.borderBottom]} key={index}>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.rowLabel}>Debes pagar a {memberMap[settlement.toId]}</Text>
+                                <Text style={styles.rowLabel}>Debes pagar a {toName}</Text>
                                 <Text style={styles.settlementAmount}>{formatMoney(settlement.amount, group.currency)}</Text>
                             </View>
                              <Button
-                                label={receipt ? 'Adjuntado' : 'Pagar'}
-                                variant={receipt ? 'ghost' : 'primary'}
-                                onPress={() => void handlePayAndAttach(key)}
+                                label="Pagar"
+                                variant="primary"
+                                onPress={() => handleSettleDebt(settlement.toId, settlement.amount, toName)}
                                 style={{ minWidth: 80, height: 36 }}
                             />
                         </View>
@@ -309,27 +433,47 @@ export default function GroupDetailScreen() {
                     <Text style={styles.meta}>No hay gastos recientes.</Text>
                 </View>
             ) : (
-                filteredExpenses.map((expense, index) => (
-                    <View key={expense.id} style={[styles.expenseItem, index < filteredExpenses.length - 1 && styles.borderBottom]}>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.expenseTitle}>{expense.title}</Text>
-                            <Text style={styles.expenseMeta}>
-                                {memberMap[expense.paidById]} pagó por {expense.participantIds.length}
+                filteredExpenses.map((expense, index) => {
+                    const isPayment = expense.type === 'payment';
+                    return (
+                        <Pressable 
+                            key={expense.id} 
+                            style={[styles.expenseItem, index < filteredExpenses.length - 1 && styles.borderBottom]}
+                            onPress={() => router.push({ pathname: '/(app)/expense/detail/[id]', params: { id: expense.id, groupId: group.id } })}
+                        >
+                            <View style={{ flex: 1 }}>
+                                <Text style={[styles.expenseTitle, isPayment && { color: colors.success }]}>
+                                    {expense.title}
+                                </Text>
+                                <Text style={styles.expenseMeta}>
+                                    {isPayment 
+                                        ? `${memberMap[expense.paidById] || 'Alguien'} pagó a ${expense.participantIds.map(id => memberMap[id]).join(', ')}`
+                                        : `${memberMap[expense.paidById] || 'Ex-miembro'} pagó por ${expense.participantIds.length}`
+                                    }
+                                </Text>
+                            </View>
+                            <Text style={[styles.expenseAmount, isPayment && { color: colors.success }]}>
+                                {formatMoney(expense.amount, group.currency)}
                             </Text>
-                        </View>
-                        <Text style={styles.expenseAmount}>
-                            {formatMoney(expense.amount, group.currency)}
-                        </Text>
-                    </View>
-                ))
+                        </Pressable>
+                    );
+                })
             )}
             </Card>
         </View>
 
         {/* Admin / Settings Area */}
         <View>
-             <SectionTitle>Administración</SectionTitle>
+             <SectionTitle>Opciones del Grupo</SectionTitle>
              <Card style={{ paddingVertical: 0 }}>
+                <Pressable
+                  style={[styles.adminRow, styles.borderBottom]}
+                  onPress={handleGenerateReport}
+                >
+                  <Text style={styles.rowLabel}>Descargar Reporte de Saldos (PDF)</Text>
+                  <FilePdf size={20} color={colors.primary} />
+                </Pressable>
+
                 {isAdmin ? (
                     <>
                         <View style={{ paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface }}>

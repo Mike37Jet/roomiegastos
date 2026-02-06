@@ -12,7 +12,7 @@ import {
     setDoc,
     updateDoc,
     where,
-    writeBatch,
+    writeBatch
 } from 'firebase/firestore';
 
 import { db } from './firebase';
@@ -403,9 +403,36 @@ export async function deleteGroup(params: { groupId: string; adminId: string }) 
   invitesSnap.docs.forEach((inviteDoc) => {
     batch.delete(inviteDoc.ref);
   });
+  await batch.commit();
+}
+
+export async function deleteExpense(params: { groupId: string; expenseId: string }) {
+  const expenseRef = doc(db, 'groups', params.groupId, 'expenses', params.expenseId);
+  const expenseSnap = await getDoc(expenseRef);
+  if (!expenseSnap.exists()) {
+    return; // Already deleted
+  }
+  const expenseData = expenseSnap.data() as Expense;
   
-  // Eliminar el grupo
-  batch.delete(groupRef);
-  
+  const batch = writeBatch(db);
+
+  if (expenseData.receiptId) {
+    // Delete all expenses with the same receiptId
+    const expensesQuery = query(
+      collection(db, 'groups', params.groupId, 'expenses'),
+      where('receiptId', '==', expenseData.receiptId)
+    );
+    const relatedExpenses = await getDocs(expensesQuery);
+    relatedExpenses.forEach((expDoc) => {
+      batch.delete(expDoc.ref);
+    });
+  } else {
+    // Just delete this one
+    batch.delete(expenseRef);
+  }
+
+  // Update group timestamp
+  batch.update(doc(db, 'groups', params.groupId), { updatedAt: Date.now() });
+
   await batch.commit();
 }

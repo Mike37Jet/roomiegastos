@@ -1,4 +1,5 @@
-import React from 'react';
+import { Check, Eye, EyeSlash } from 'phosphor-react-native';
+import React, { useState } from 'react';
 import {
     Platform,
     Pressable,
@@ -52,18 +53,34 @@ export function Field({
   secureTextEntry?: boolean;
 }) {
   const { styles, colors } = useUIStyles();
+  const [isSecure, setIsSecure] = useState(secureTextEntry);
+
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textSecondary}
-        keyboardType={keyboardType}
-        secureTextEntry={secureTextEntry}
-        style={styles.input}
-      />
+      <View style={{ justifyContent: 'center' }}>
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textSecondary}
+          keyboardType={keyboardType}
+          secureTextEntry={isSecure}
+          style={[styles.input, secureTextEntry && { paddingRight: 48 }]}
+        />
+        {secureTextEntry && (
+          <Pressable
+            onPress={() => setIsSecure(!isSecure)}
+            style={{ position: 'absolute', right: 12, padding: 4 }}
+          >
+            {isSecure ? (
+              <Eye size={20} color={colors.textSecondary} />
+            ) : (
+              <EyeSlash size={20} color={colors.textSecondary} />
+            )}
+          </Pressable>
+        )}
+      </View>
     </View>
   );
 }
@@ -115,6 +132,18 @@ export function Tag({ text }: { text: string }) {
     <View style={styles.tag}>
       <Text style={styles.tagText}>{text}</Text>
     </View>
+  );
+}
+
+export function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
+  const { styles, colors } = useUIStyles();
+  return (
+    <Pressable onPress={() => onChange(!checked)} style={styles.checkboxContainer}>
+      <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+        {checked && <Check size={14} color="white" weight="bold" />}
+      </View>
+      <Text style={styles.checkboxLabel}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -225,6 +254,30 @@ function createStyles(colors: ThemeColors) {
       fontSize: 13,
       fontWeight: '500',
       color: colors.textSecondary,
+    },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 4,
+    },
+    checkbox: {
+      width: 20,
+      height: 20,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    checkboxLabel: {
+      fontSize: 15,
+      color: colors.text,
     },
   });
 

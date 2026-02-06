@@ -18,6 +18,7 @@ import {
     acceptInvite,
     addExpense as addExpenseRemote,
     createGroup as createGroupRemote,
+    deleteExpense as deleteExpenseRemote,
     deleteGroup,
     ensureUserProfile,
     leaveGroup,
@@ -58,6 +59,7 @@ type StoreActions = {
   leaveGroup: (groupId: string) => Promise<void>;
   removeMember: (groupId: string, memberId: string) => Promise<void>;
   deleteGroup: (groupId: string) => Promise<void>;
+  deleteExpense: (groupId: string, expenseId: string) => Promise<void>;
   changePassword: (params: { currentPassword: string; newPassword: string }) => Promise<{
     ok: boolean;
     message?: string;
@@ -320,6 +322,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       deleteGroup: async (groupId) => {
         if (!state.data.user) throw new Error('Necesitas iniciar sesion');
         await deleteGroup({ groupId, adminId: state.data.user.id });
+      },
+      deleteExpense: async (groupId, expenseId) => {
+        if (!state.data.user) return;
+        await deleteExpenseRemote({ groupId, expenseId });
       },
       changePassword: async ({ currentPassword, newPassword }) => {
         try {

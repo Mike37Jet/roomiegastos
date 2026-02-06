@@ -1,13 +1,12 @@
+import { useRouter } from 'expo-router';
 import React, { useMemo } from 'react';
 import { Dimensions, FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { StackedBarChart } from 'react-native-chart-kit';
-import { useRouter } from 'expo-router';
 
 import { calculateBalances, calculateSettlements } from '@/src/calc';
 import { useStore } from '@/src/store';
 import { ThemeColors, useThemeColors } from '@/src/theme';
-import { formatMoney } from '@/src/utils';
 import { Card, Screen, SectionTitle } from '@/src/ui';
+import { formatMoney } from '@/src/utils';
 
 type PaymentItem = {
   id: string;
@@ -152,20 +151,13 @@ export default function PaymentsScreen() {
     [payByCurrency, receiveByCurrency],
   );
 
-  const chartData = useMemo(
-    () => ({
-      labels: currencyKeys,
-      legend: ['Debes pagar', 'Te deben'],
-      data: currencyKeys.map((currency) => [
-        Math.max(payByCurrency[currency] || 0, 0),
-        Math.max(receiveByCurrency[currency] || 0, 0),
-      ]),
-    }),
-    [currencyKeys, payByCurrency, receiveByCurrency],
-  );
-
-  const chartHeight = Math.max(220, currencyKeys.length * 60 + 80);
-  const chartWidth = screenWidth - 40; // 20 padding per side from Screen
+  const maxValue = useMemo(() => {
+    return currencyKeys.reduce((max, currency) => {
+      const p = payByCurrency[currency] || 0;
+      const r = receiveByCurrency[currency] || 0;
+      return Math.max(max, p, r);
+    }, 0);
+  }, [currencyKeys, payByCurrency, receiveByCurrency]);
 
   return (
     <Screen>
@@ -190,29 +182,90 @@ export default function PaymentsScreen() {
         </Card>
 
         <SectionTitle>Resumen visual</SectionTitle>
-        <Card style={{ gap: 12 }}>
+        <Card style={{ gap: 20 }}>
           {currencyKeys.length === 0 ? (
-            <Text style={styles.meta}>Sin datos todavia.</Text>
+            <Text style={styles.meta}>Sin datos todavía.</Text>
           ) : (
-            <StackedBarChart
-              style={{ borderRadius: 12 }}
-              data={{
-                ...chartData,
-                barColors: [styles.barFillPay.backgroundColor, styles.barFillReceive.backgroundColor],
-              }}
-              width={chartWidth}
-              height={chartHeight}
-              withHorizontalLabels
-              hideLegend
-              chartConfig={{
-                backgroundGradientFrom: styles.chartBg.backgroundColor as string,
-                backgroundGradientTo: styles.chartBg.backgroundColor as string,
-                color: (opacity = 1) => hexToRgba(colors.text as string, opacity),
-                labelColor: (opacity = 1) => hexToRgba(colors.muted as string, opacity),
-                barPercentage: 0.6,
-                decimalPlaces: 0,
-              }}
-            />
+            currencyKeys.map((currency) => {
+              const pay = payByCurrency[currency] || 0;
+              const receive = receiveByCurrency[currency] || 0;
+              const max = maxValue || 1;
+              return (
+                <View key={currency} style={{ gap: 8 }}>
+                  <Text style={{ fontWeight: '600', color: colors.text }}>{currency}</Text>
+                  
+                  {/* Pay Bar */}
+                  <View>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        marginBottom: 4,
+                      }}>
+                      <Text style={{ fontSize: 12, color: colors.muted }}>Debes</Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.danger,
+                          fontWeight: '600',
+                        }}>
+                        {formatMoney(pay, currency)}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 10,
+                        backgroundColor: colors.background,
+                        borderRadius: 5,
+                        overflow: 'hidden',
+                      }}>
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.max((pay / max) * 100, 0)}%`,
+                          backgroundColor: colors.danger,
+                        }}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Receive Bar */}
+                  <View>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        marginBottom: 4,
+                      }}>
+                      <Text style={{ fontSize: 12, color: colors.muted }}>Te deben</Text>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          color: colors.primary,
+                          fontWeight: '600',
+                        }}>
+                        {formatMoney(receive, currency)}
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        height: 10,
+                        backgroundColor: colors.background,
+                        borderRadius: 5,
+                        overflow: 'hidden',
+                      }}>
+                      <View
+                        style={{
+                          height: '100%',
+                          width: `${Math.max((receive / max) * 100, 0)}%`,
+                          backgroundColor: colors.primary,
+                        }}
+                      />
+                    </View>
+                  </View>
+                </View>
+              );
+            })
           )}
         </Card>
 
@@ -427,28 +480,5 @@ const createStyles = (colors: ThemeColors) =>
       backgroundColor: colors.border,
       marginVertical: 6,
     },
-    barFillPay: {
-      height: '100%',
-      backgroundColor: colors.danger,
-      borderRadius: 999,
-    },
-    barFillReceive: {
-      height: '100%',
-      backgroundColor: colors.primary,
-      borderRadius: 999,
-    },
-    barLabel: {
-      width: 90,
-      textAlign: 'right',
-      fontSize: 12,
-      color: colors.text,
-      fontWeight: '600',
-    },
-    legendText: {
-      fontSize: 12,
-      color: colors.muted,
-    },
-    chartBg: {
-      backgroundColor: colors.card,
-    },
+    // Removido estilos no usados de la grafica anterior
   });

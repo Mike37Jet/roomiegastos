@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
 
-import { useThemeColors, ThemeColors } from '@/src/theme';
+import { ThemeColors, useThemeColors } from '@/src/theme';
 
 type Props = {
   label: string;
@@ -26,14 +26,14 @@ export function Chip({ label, active = false, onPress, style, colors: override }
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     chip: {
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
       borderWidth: 1,
     },
     chipActive: {
       borderColor: colors.primary,
-      backgroundColor: 'rgba(60,167,157,0.15)',
+      backgroundColor: colors.primary + '26', // ~15% opacity
     },
     chipInactive: {
       borderColor: colors.border,
