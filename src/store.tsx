@@ -1,31 +1,36 @@
-import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import {
-  createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
-  onAuthStateChanged,
-  sendEmailVerification,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile,
+    createUserWithEmailAndPassword,
+    fetchSignInMethodsForEmail,
+    onAuthStateChanged,
+    sendEmailVerification,
+    sendPasswordResetEmail,
+    signInWithEmailAndPassword,
+    signOut,
+    updatePassword,
+    updateProfile,
 } from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 
 import { calculateBalances } from './calc';
-import { AppState, Expense, Group, GroupInvite, Member, User } from './types';
 import { auth } from './firebase';
-import {
-  acceptInvite,
-  addExpense as addExpenseRemote,
-  createGroup as createGroupRemote,
-  ensureUserProfile,
-  listenPendingInvites,
-  listenUserGroups,
-  listenUserProfile,
-  rejectInvite,
-  requestJoinByCode,
-  savePushToken,
-  setPremium,
-} from './rtdb';
 import { registerForPushNotificationsAsync } from './notifications';
+import {
+    acceptInvite,
+    addExpense as addExpenseRemote,
+    createGroup as createGroupRemote,
+    deleteGroup,
+    ensureUserProfile,
+    leaveGroup,
+    listenPendingInvites,
+    listenUserGroups,
+    listenUserProfile,
+    rejectInvite,
+    removeMemberFromGroup,
+    requestJoinByCode,
+    savePushToken,
+    setPremium,
+} from './rtdb';
+import { AppState, Expense, Group, GroupInvite, Member, User } from './types';
 
 type StoreState = {
   ready: boolean;
@@ -50,6 +55,15 @@ type StoreActions = {
   acceptInvite: (inviteId: string) => Promise<void>;
   rejectInvite: (inviteId: string) => Promise<void>;
   togglePremium: (value: boolean) => Promise<void>;
+  leaveGroup: (groupId: string) => Promise<void>;
+  removeMember: (groupId: string, memberId: string) => Promise<void>;
+  deleteGroup: (groupId: string) => Promise<void>;
+  changePassword: (params: { currentPassword: string; newPassword: string }) => Promise<{
+    ok: boolean;
+    message?: string;
+  }>;
+  sendPasswordResetEmail: (email: string) => Promise<{ ok: boolean; message?: string }>;
+  revokePremium: () => Promise<void>;
 };
 
 type StoreContextValue = {
@@ -294,6 +308,63 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       togglePremium: async (value) => {
         if (!state.data.user) return;
         await setPremium(state.data.user.id, value);
+      },
+      leaveGroup: async (groupId) => {
+        if (!state.data.user) throw new Error('Necesitas iniciar sesion');
+        await leaveGroup({ groupId, userId: state.data.user.id });
+      },
+      removeMember: async (groupId, memberId) => {
+        if (!state.data.user) throw new Error('Necesitas iniciar sesion');
+        await removeMemberFromGroup({ groupId, memberId, adminId: state.data.user.id });
+      },
+      deleteGroup: async (groupId) => {
+        if (!state.data.user) throw new Error('Necesitas iniciar sesion');
+        await deleteGroup({ groupId, adminId: state.data.user.id });
+      },
+      changePassword: async ({ currentPassword, newPassword }) => {
+        try {
+          const user = auth.currentUser;
+          if (!user || !user.email) {
+            return { ok: false, message: 'No hay usuario autenticado' };
+          }
+          // Re-autenticar primero con la contraseña actual
+          await signInWithEmailAndPassword(auth, user.email, currentPassword);
+          // Cambiar a la nueva contraseña
+          await updatePassword(user, newPassword);
+          return { ok: true, message: 'Contraseña actualizada exitosamente' };
+        } catch (error) {
+          console.warn('changePassword failed', error);
+          const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+          if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            return { ok: false, message: 'La contraseña actual es incorrecta' };
+          }
+          if (code === 'auth/weak-password') {
+            return { ok: false, message: 'La nueva contraseña es muy débil. Usa al menos 6 caracteres' };
+          }
+          return {
+            ok: false,
+            message: 'No se pudo cambiar la contraseña. Intenta de nuevo',
+          };
+        }
+      },
+      sendPasswordResetEmail: async (email) => {
+        try {
+          await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+          return {
+            ok: true,
+            message: 'Te enviamos un correo para restablecer tu contraseña',
+          };
+        } catch (error) {
+          console.warn('sendPasswordResetEmail failed', error);
+          return {
+            ok: false,
+            message: 'No se pudo enviar el correo. Verifica tu email',
+          };
+        }
+      },
+      revokePremium: async () => {
+        if (!state.data.user) return;
+        await setPremium(state.data.user.id, false);
       },
     };
   }, [state.data.user]);

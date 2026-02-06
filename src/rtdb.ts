@@ -1,23 +1,23 @@
-import {
-  FieldPath,
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch,
-} from 'firebase/firestore';
 import type { User as FirebaseUser } from 'firebase/auth';
+import {
+    FieldPath,
+    collection,
+    doc,
+    getDoc,
+    getDocs,
+    limit,
+    onSnapshot,
+    orderBy,
+    query,
+    setDoc,
+    updateDoc,
+    where,
+    writeBatch,
+} from 'firebase/firestore';
 
 import { db } from './firebase';
-import { createInviteCode } from './utils';
 import type { Expense, Group, GroupInvite, Member, User } from './types';
+import { createInviteCode } from './utils';
 
 type FSGroup = {
   name: string;
@@ -42,7 +42,9 @@ type FSInvite = {
 };
 
 function toGroupBase(id: string, data: FSGroup): Group {
-  const members = data.members ? Object.values(data.members) : [];
+  const members = data.members 
+    ? Object.values(data.members).filter((m): m is Member => m !== null && m !== undefined) 
+    : [];
   return {
     id,
     name: data.name,
@@ -313,4 +315,97 @@ export async function savePushToken(params: { userId: string; token: string }) {
 
 export async function setPremium(userId: string, value: boolean) {
   await updateDoc(doc(db, 'users', userId), { premium: value });
+}
+
+export async function leaveGroup(params: { groupId: string; userId: string }) {
+  const groupRef = doc(db, 'groups', params.groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) {
+    throw new Error('Grupo no encontrado');
+  }
+  const groupData = groupSnap.data() as FSGroup;
+  if (groupData.adminId === params.userId) {
+    throw new Error('El admin no puede abandonar el grupo. Transfiere el rol de admin primero.');
+  }
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(
+    groupRef,
+    new FieldPath('memberIds', params.userId),
+    false,
+    new FieldPath('members', params.userId),
+    null,
+    'updatedAt',
+    now
+  );
+  await batch.commit();
+}
+
+export async function removeMemberFromGroup(params: {
+  groupId: string;
+  memberId: string;
+  adminId: string;
+}) {
+  const groupRef = doc(db, 'groups', params.groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) {
+    throw new Error('Grupo no encontrado');
+  }
+  const groupData = groupSnap.data() as FSGroup;
+  if (groupData.adminId !== params.adminId) {
+    throw new Error('Solo el admin puede remover miembros');
+  }
+  if (groupData.adminId === params.memberId) {
+    throw new Error('No puedes removerte a ti mismo como admin');
+  }
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(
+    groupRef,
+    new FieldPath('memberIds', params.memberId),
+    false,
+    new FieldPath('members', params.memberId),
+    null,
+    'updatedAt',
+    now
+  );
+  await batch.commit();
+}
+
+export async function deleteGroup(params: { groupId: string; adminId: string }) {
+  const groupRef = doc(db, 'groups', params.groupId);
+  const groupSnap = await getDoc(groupRef);
+  if (!groupSnap.exists()) {
+    throw new Error('Grupo no encontrado');
+  }
+  const groupData = groupSnap.data() as FSGroup;
+  if (groupData.adminId !== params.adminId) {
+    throw new Error('Solo el admin puede eliminar el grupo');
+  }
+  
+  // Eliminar todos los gastos del grupo (subcolección)
+  const expensesQuery = query(collection(db, 'groups', params.groupId, 'expenses'));
+  const expensesSnap = await getDocs(expensesQuery);
+  
+  const batch = writeBatch(db);
+  
+  // Eliminar cada gasto
+  expensesSnap.docs.forEach((expenseDoc) => {
+    batch.delete(expenseDoc.ref);
+  });
+  
+  // Eliminar invitaciones pendientes del grupo
+  const invitesQuery = query(
+    collection(db, 'groupInvites'),
+    where('groupId', '==', params.groupId)
+  );
+  const invitesSnap = await getDocs(invitesQuery);
+  invitesSnap.docs.forEach((inviteDoc) => {
+    batch.delete(inviteDoc.ref);
+  });
+  
+  // Eliminar el grupo
+  batch.delete(groupRef);
+  
+  await batch.commit();
 }

@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import { getApps, initializeApp } from 'firebase/app';
 import { getAuth, getReactNativePersistence, initializeAuth, type Auth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, setLogLevel, type Firestore } from 'firebase/firestore';
+import { Platform } from 'react-native';
 
 const requiredEnv = [
   'EXPO_PUBLIC_FIREBASE_API_KEY',
@@ -14,7 +15,8 @@ const requiredEnv = [
 ] as const;
 
 const ensureEnv = (key: (typeof requiredEnv)[number]) => {
-  const value = process.env[key];
+  // First try process.env for dev builds, then fall back to expo-constants for production
+  const value = process.env[key] || Constants.expoConfig?.extra?.[key];
   if (!value) {
     throw new Error(`Missing required env var ${key}. Check your .env / app config.`);
   }

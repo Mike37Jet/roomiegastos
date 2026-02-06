@@ -1,29 +1,30 @@
+import * as ImagePicker from 'expo-image-picker';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { NotePencil, PaperPlaneTilt, PlusCircle, SignOut, Trash, UserMinus } from 'phosphor-react-native';
 import { useMemo, useState } from 'react';
 import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, NotePencil, PaperPlaneTilt, PlusCircle } from 'phosphor-react-native';
-import * as ImagePicker from 'expo-image-picker';
 
-import { Button, Card, Screen, SectionTitle } from '@/src/ui';
-import { useStore } from '@/src/store';
 import { calculateBalances, calculateSettlements } from '@/src/calc';
-import { ThemeColors, useThemeColors } from '@/src/theme';
-import { formatMoney } from '@/src/utils';
 import { Chip } from '@/src/components/Chip';
+import { useStore } from '@/src/store';
+import { ThemeColors, useThemeColors } from '@/src/theme';
+import { Button, Card, Screen, SectionTitle } from '@/src/ui';
+import { formatMoney } from '@/src/utils';
 
 export default function GroupDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const groupId = Array.isArray(id) ? id[0] : id;
-  const { state } = useStore();
+  const { state, actions } = useStore();
   const colors = useThemeColors();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const group = state.groups.find((item) => item.id === groupId);
-  const isAdmin = group?.adminId === state.user?.id;
-  const currentUserId = state.user?.id;
   const [query, setQuery] = useState('');
   const [range, setRange] = useState<'1d' | '7d' | '30d' | 'all'>('30d');
   const [receipts, setReceipts] = useState<Record<string, string>>({});
+  
+  const group = state.groups.find((item) => item.id === groupId);
+  const isAdmin = group?.adminId === state.user?.id;
+  const currentUserId = state.user?.id;
 
   const memberMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -33,17 +34,9 @@ export default function GroupDetailScreen() {
     return map;
   }, [group]);
 
-  if (!group) {
-    return (
-      <Screen>
-        <Text style={styles.emptyText}>Grupo no encontrado.</Text>
-      </Screen>
-    );
-  }
-
-  const balances = calculateBalances(group);
-  const settlements = calculateSettlements(balances);
-  const inviteMessage = `Unete a mi grupo "${group.name}" en Roomiegastos. Codigo: ${group.inviteCode}`;
+  const balances = useMemo(() => group ? calculateBalances(group) : [], [group]);
+  const settlements = useMemo(() => calculateSettlements(balances), [balances]);
+  const inviteMessage = group ? `Unete a mi grupo "${group.name}" en Roomiegastos. Codigo: ${group.inviteCode}` : '';
   const now = Date.now();
 
   const settlementsYouOwe = currentUserId
@@ -96,6 +89,7 @@ export default function GroupDetailScreen() {
   }, [group, query, range, now, memberMap]);
 
   const handleShareInvite = async () => {
+    if (!group) return;
     try {
       const url = `https://wa.me/?text=${encodeURIComponent(inviteMessage)}`;
       const supported = await Linking.canOpenURL(url);
@@ -108,6 +102,85 @@ export default function GroupDetailScreen() {
       Alert.alert('No se pudo compartir', 'Intenta de nuevo.');
     }
   };
+
+  const handleLeaveGroup = () => {
+    if (!group) return;
+    Alert.alert(
+      'Salir del grupo',
+      `¿Estas seguro que quieres salir de "${group.name}"? No podras ver los gastos ni balances.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Salir',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await actions.leaveGroup(groupId);
+              router.back();
+              Alert.alert('Exito', 'Has salido del grupo');
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'No se pudo salir del grupo');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    Alert.alert(
+      'Remover miembro',
+      `¿Seguro que quieres remover a ${memberName} del grupo?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await actions.removeMember(groupId, memberId);
+              Alert.alert('Exito', `${memberName} fue removido del grupo`);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'No se pudo remover al miembro');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteGroup = () => {
+    if (!group) return;
+    const groupName = group.name;
+    Alert.alert(
+      'Eliminar grupo',
+      `¿Estas completamente seguro que quieres eliminar "${groupName}"? Esta acción no se puede deshacer y se perderán todos los gastos y datos del grupo.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await actions.deleteGroup(groupId);
+              router.replace('/(app)');
+              Alert.alert('Grupo eliminado', `El grupo "${groupName}" ha sido eliminado`);
+            } catch (error: any) {
+              Alert.alert('Error', error.message || 'No se pudo eliminar el grupo');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (!group) {
+    return (
+      <Screen>
+        <Text style={styles.emptyText}>Grupo no encontrado.</Text>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -144,6 +217,56 @@ export default function GroupDetailScreen() {
             onPress={() => router.push({ pathname: '/(app)/receipt/manual', params: { groupId: group.id } })}
           />
         </Card>
+
+        {isAdmin && (
+          <>
+            <SectionTitle>Miembros</SectionTitle>
+            <Card>
+              {group.members.map((member) => (
+                <View style={styles.memberRow} key={member.id}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowLabel}>
+                      {member.name}
+                      {member.id === group.adminId && ' (Admin)'}
+                    </Text>
+                  </View>
+                  {member.id !== group.adminId && (
+                    <Button
+                      label="Remover"
+                      variant="ghost"
+                      icon={<UserMinus color={colors.danger} />}
+                      onPress={() => handleRemoveMember(member.id, member.name)}
+                    />
+                  )}
+                </View>
+              ))}
+            </Card>
+
+            <SectionTitle>Zona de peligro</SectionTitle>
+            <Card>
+              <Text style={styles.dangerText}>
+                Eliminar el grupo es permanente. Todos los gastos, balances e historial se perderán.
+              </Text>
+              <Button
+                label="Eliminar grupo"
+                variant="ghost"
+                icon={<Trash color={colors.danger} />}
+                onPress={handleDeleteGroup}
+              />
+            </Card>
+          </>
+        )}
+
+        {!isAdmin && (
+          <Card>
+            <Button
+              label="Salir del grupo"
+              variant="ghost"
+              icon={<SignOut color={colors.danger} />}
+              onPress={handleLeaveGroup}
+            />
+          </Card>
+        )}
 
         <SectionTitle>Balances</SectionTitle>
         <Card>
@@ -255,6 +378,13 @@ const createStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
       alignItems: 'center',
     },
+    memberRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+      gap: 12,
+    },
     inviteBox: {
       padding: 12,
       borderRadius: 12,
@@ -301,6 +431,11 @@ const createStyles = (colors: ThemeColors) =>
     },
     negative: {
       color: colors.danger,
+    },
+    dangerText: {
+      color: colors.muted,
+      fontSize: 13,
+      marginBottom: 8,
     },
     emptyText: {
       color: colors.muted,
